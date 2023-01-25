@@ -1,26 +1,24 @@
 # Introduction
-In this notebook I scrape the battlefieldttracker Battlefield 5 [Leaderboard](https://battlefieldtracker.com/bfv/leaderboards/stats/all/Wins?page=1) as well as all of the profiles (ex. [this](https://battlefieldtracker.com/bfv/profile/psn/themadbat2/overview)) and perform some exploratory data analysis on the resulting information.
+In this notebook I scrape the battlefieldttracker Battlefield 5 [Leaderboard](https://battlefieldtracker.com/bfv/leaderboards/stats/all/Wins?page=1) as well as all of the profiles (ex. [this](https://battlefieldtracker.com/bfv/profile/psn/themadbat2/overview)).
 
-For web scraping I retrieve information from the site's "hidden API," using Selenium to get around an issue of the JSON not loading, and I store the data in a SQL database. Po
+For web scraping I retrieve information from the site's "hidden API," using Selenium to get around an issue of the JSON not loading, and I store the data in a SQL database.
 
 # Contents
 
-**scrapery.py**: used to scrape the site
+* Scraper Files
 
-**analysis.ipynb**: notebook containing analysis (WIP)
+    * [scraper.py](scraper.py): python script for web scraping
+    * [categories_to_scrape.txt](categories_to_scrape.txt): JSON keys to keep while scraping
 
-**dfvstats.db**: contains the actual data as well as some logging information.
+* Database Files
+    * [bfvstats.db](bfvstats.db): SQLite database containing player performance metrics
+    * [useful_queries_sqlite.sql](useful_queries_sqlite.sql): SQL queries for getting useful summary information out of the above database.
+    * [create_sqlite_bfvstats_tables.py](create_sqlite_bfvstats_tables.py): Creates a new, empty database with appropriate tables using python. You should have no need for this, but it may be useful if you want to scrape newer data.
+    * [create_bfvstats_sqlite.txt](create_bfvstats_sqlite.txt): Query to be used with the above script. You should have no need for this, but it may be useful if you want to scrape newer data.
 
-**categories_to_scrape.txt**: text file containing names of keys I want to target while scraping. A bit preferable to collecting these automatically from JSON at the beginning of every run
-
-**data/**: contains files from when I was storing the data in .csv format. To be removed in the future.
-
-**database_backup**: I am considering potential future changes to the database, so I am keeping a reasonably recent backup until I am satisfied with my set up.
-
-**scraper_explanation.py**: Old version of the scraper. Should be deprecated.
+* EDA Notebook
+    * [analysis.ipynb](analysis.ipynb): Notebook containing some preliminary exploratory data analysis. This would need to be fleshed out a bit for downstream tasks, but it addresses issues with the dataset like feature engineering, outliers, bin number selection due to those outliers, high correlations between features, and missing values.
 
 # To do
-Finish scraping the site.
-
-Despite the scraping not being finished, I am working on the analysis notebook as I can start on outlier detection using some domain knowledge, I can reasonably expect the frequency of NaN's to stay low, I can code up analysis that I know needs to be done even if I don't know the outcome, etc.
+Nothing, at the moment.
 
