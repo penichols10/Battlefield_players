@@ -1,4 +1,3 @@
-import requests
 import time
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -9,13 +8,11 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 import json
-import os
 import sqlite3
 import numpy as np
 
 con = sqlite3.connect('bfvstats.db')
 cur = con.cursor()
-
 
 def update_log(skip, cursor, connection):
     '''
@@ -23,30 +20,24 @@ def update_log(skip, cursor, connection):
     Parameters: skip, number of profiles skipped in mostly completed iteration of scraping
                 cursor, a cursor that allows for sending queries to a sql database
                 connection, used to connect to a database and "commit" (i.e. make permanent) changes
-    Returns: new connection to database and associated cursor
     '''
-    cursor.execute(
-        f'INSERT INTO log (skip, time) VALUES ({skip}, CURRENT_TIMESTAMP);')
-    print('Updated log ', skip)
+    cursor.execute(f'INSERT INTO log (skip, time) VALUES ({skip}, CURRENT_TIMESTAMP);')
     connection.commit()
-    connection.close()
-
-    connection = sqlite3.connect('bfvstats.db')
-    cursor = connection.cursor()
-    return connection, cursor
-
-
+    
 def retrieve_last_run(cursor):
     '''
     Retrieves the most recent number of profiles skipped from the database
     Parameter: cursor, a cursor that allows for sending queries to a sql database
     Returns: last_run, the number of profiles skipped on the last round of scraping
     '''
-    # Sort runs in descending order and return the largest
-    last_run = cursor.execute(
-        'SELECT skip FROM log ORDER BY skip DESC LIMIT 1;').fetchall()[0][0]
-    return last_run
-
+    # Checks number of previous runs
+    num_runs = cursor.execute('SELECT COUNT(*) FROM log').fetchall()[0][0]
+    if num_runs > 0:
+        # Sort runs in descending order and return the largest
+        last_run = cursor.execute('SELECT skip FROM log ORDER BY skip DESC LIMIT 1;').fetchall()[0][0]
+        return last_run
+    else: 
+        return 0
 
 def read_categories(categories_to_scrape_file):
     '''
@@ -63,7 +54,6 @@ def read_categories(categories_to_scrape_file):
         class_categories = categories[1].split(' ')
     return history_categories, class_categories
 
-
 def parse_player(player_json):
     '''
     Retrives the players username and platform and returns their player_id and platform
@@ -74,9 +64,8 @@ def parse_player(player_json):
     player_username = player_json['id']
     player_platform = player_json['owner']['metadata']['platformSlug']
     player_id = f'{player_platform}/{player_username}'
-
+    
     return player_id, player_platform
-
 
 def parse_leaderboard(leaderboard_url, stat_dict):
     '''
@@ -113,9 +102,8 @@ def parse_leaderboard(leaderboard_url, stat_dict):
         if 'player_id' not in stat_dict:
             stat_dict['player_id'] = []
             stat_dict['platform'] = []
-
+            
     return stat_dict
-
 
 def parse_history_for_player(history_json, stat_dict, history_categories):
     '''
@@ -133,21 +121,20 @@ def parse_history_for_player(history_json, stat_dict, history_categories):
         else:
             stat_value = np.nan
             stat_percentile = np.nan
-
+        
         # Add value to stat_dict
         if stat+'_value' in stat_dict:
             stat_dict[stat+'_value'].append(stat_value)
         else:
             stat_dict[stat+'_value'] = [stat_value]
-
+            
         # Add percentile to stat_dict
         if stat+'_percentile' in stat_dict:
             stat_dict[stat+'_percentile'].append(stat_percentile)
         else:
             stat_dict[stat+'_percentile'] = [stat_percentile]
 
-    return stat_dict
-
+    return stat_dict  
 
 def parse_class_stats(class_json, stat_dict, class_categories):
     '''
@@ -160,8 +147,8 @@ def parse_class_stats(class_json, stat_dict, class_categories):
     class_name = class_json['metadata']['name']
     available_stats = list(class_json['stats'].keys())[1:]
 
-    # Add class stats to stat_dict
-    for stat in class_categories:  # The first entry is player rank, which we don't need
+    # Add class stats to stat_dict       
+    for stat in class_categories: # The first entry is player rank, which we don't need
         # Check if the desired stat is present in the JSON
         if stat in available_stats:
             stat_percentile = class_json['stats'][stat]['percentile']
@@ -169,23 +156,22 @@ def parse_class_stats(class_json, stat_dict, class_categories):
         else:
             stat_percentile = np.nan
             stat_value = np.nan
-
-        stat_name = f'{class_name}_{stat}'  # ex Assault_kills
-
+        
+        stat_name = f'{class_name}_{stat}' # ex Assault_kills
+        
         # Add stat value to dictionary
         if stat_name+'_value' in stat_dict:
             stat_dict[stat_name+'_value'].append(stat_value)
         else:
             stat_dict[stat_name+'_value'] = [stat_value]
-
+        
         # Add stat percentile to dictionary
         if stat_name+'_percentile' in stat_dict:
             stat_dict[stat_name+'_percentile'].append(stat_percentile)
         else:
             stat_dict[stat_name+'_percentile'] = [stat_percentile]
-
+            
     return stat_dict
-
 
 def parse_classes_for_player(classes_json, stat_dict, class_categories):
     '''
@@ -198,7 +184,7 @@ def parse_classes_for_player(classes_json, stat_dict, class_categories):
     classes = ['medic', 'assault', 'support', 'recon', 'tanker', 'pilot']
     for class_json in classes_json:
         stat_dict = parse_class_stats(class_json, stat_dict, class_categories)
-
+    
     # Check to see if class data was found for all classes for the player - some players do not have data for certain classes
     # First, identify class related features
     class_features = []
@@ -206,8 +192,8 @@ def parse_classes_for_player(classes_json, stat_dict, class_categories):
         for feature in stat_dict:
             if player_class in feature.lower():
                 class_features.append(feature)
-
-    # Check to see if all class related features are of same length, if not, fill short features with NaN
+    
+    # Check to see if all class related features are of same length, if not, fill short features with NaN      
     feature_lengths = [len(stat_dict[feature]) for feature in class_features]
     unique_feature_lengths = set(feature_lengths)
     if len(unique_feature_lengths) > 1:
@@ -215,9 +201,8 @@ def parse_classes_for_player(classes_json, stat_dict, class_categories):
         for i, feature_length in enumerate(feature_lengths):
             if feature_length < num_samples:
                 short_feature = class_features[i]
-                # Since we do this for each player, should never need to add more than 1 NaN per player
-                stat_dict[short_feature].append(np.nan)
-
+                stat_dict[short_feature].append(np.nan) # Since we do this for each player, should never need to add more than 1 NaN per player
+                    
     return stat_dict
 
 
@@ -230,7 +215,7 @@ def parse_player_stats(stat_dict, history_categories, class_categories):
     Returns: stat_dict, with stats added for every player in current round of leaderboard scraping
     '''
     for player_id in tqdm(stat_dict['player_id']):
-
+        
         # Get overall history for player
         api_url = f"https://api.tracker.gg/api/v2/bfv/standard/profile/{player_id}?"
 
@@ -243,9 +228,8 @@ def parse_player_stats(stat_dict, history_categories, class_categories):
         if 'data' in history_json:
             history_json_data = history_json['data']['segments'][0]['stats']
 
-            stat_dict = parse_history_for_player(
-                history_json_data, stat_dict, history_categories)
-
+            stat_dict = parse_history_for_player(history_json_data, stat_dict, history_categories)
+               
         # Get class info for the user in question
         api_url = f"https://api.tracker.gg/api/v2/bfv/standard/profile/{player_id}/segments/class"
 
@@ -256,18 +240,18 @@ def parse_player_stats(stat_dict, history_categories, class_categories):
         classes_json = json.loads(soup.body.pre.text)
         if 'data' in classes_json:
             classes_json_data = classes_json['data']
-
-            stat_dict = parse_classes_for_player(
-                classes_json_data, stat_dict, class_categories)
+            
+            stat_dict = parse_classes_for_player(classes_json_data, stat_dict, class_categories)
 
         # Drop player if no associated information
         if 'data' not in history_json and 'data' not in classes_json:
             stat_dict['player_id'] = stat_dict['player_id'][:-1]
             stat_dict['platform'] = stat_dict['platform'][:-1]
-
+        
         time.sleep(2)
-
-    return stat_dict
+        
+        
+    return stat_dict        
 
 
 def scrape_page(leaderboard_url, stat_dict, history_categories, class_categories):
@@ -281,55 +265,59 @@ def scrape_page(leaderboard_url, stat_dict, history_categories, class_categories
     '''
     # Scrape the page
     stat_dict = parse_leaderboard(leaderboard_url, stat_dict)
-    stat_dict = parse_player_stats(
-        stat_dict, history_categories, class_categories)
-
+    stat_dict = parse_player_stats(stat_dict, history_categories, class_categories)
+    
     return stat_dict
 
-
-def scrape_site(history_categories, class_categories, cur=cur, con=con, skip_init=0):
+def scrape_site(history_categories, class_categories, cur=cur, con=con):
     '''
     Collects data about all players.
     Parameters: history_categories, a list of general categories to collect from the JSON
                 class_categories, a list of class-specific categories to collect from the JSON
     '''
-
+    
     # determine how many profiles to skip
-    skip = 0
-    files = os.listdir('data')
-    if len(files) > 0:
-        skip = retrieve_last_run(cur) + 100
-        print(f'Skipping first {skip} profiles.')
+    skip = retrieve_last_run(cur) + 100
+    print(skip)
+    print(f'Skipping first {skip} profiles.')
 
-    while skip <= 78800:  # Max number of profiles, found manually
+    while skip < 78800: # Max number of profiles, found manually
         leaderboard_url = f'https://api.tracker.gg/api/v1/bfv/standard/leaderboards?type=stats&platform=all&board=WINS&skip={skip}&take=100'
-
+        
         # scrape page
         stat_dict = {}
-        stat_dict = scrape_page(
-            leaderboard_url, stat_dict, history_categories, class_categories)
-        key_lens = [len(stat_dict[key]) for key in stat_dict]
-        if len(list(set(key_lens))) > 1:
-            for key in stat_dict:
-                print(key, len(stat_dict[key]))
+        stat_dict = scrape_page(leaderboard_url, stat_dict, history_categories, class_categories)
+        # key_lens = [len(stat_dict[key]) for key in stat_dict]
 
         # Load previous progess, if any
         current_iter = pd.DataFrame.from_dict(stat_dict)
-
+        # previous_file_name = f'bfvstats_skip{skip-100}.csv'
+        
+        # save the data
         current_iter.to_sql('bfvstats', con=con, if_exists='append')
-        con, cur = update_log(skip, cur, con)
+        update_log(skip, cur, con)    
+        
+        # if previous_file_name in files:
+        #     previous_iter = pd.read_csv('data/'+previous_file_name, index_col=0)
+        #     combined_df = pd.concat([previous_iter, current_iter]).reset_index(drop=True)
+        #     combined_df = combined_df.drop_duplicates(subset=['player_id'])
+
+        #     combined_df.to_csv(f'data/bfvstats_skip{skip}.csv')           
+            
+        # else:
+        #     current_iter.to_csv(f'data/bfvstats_skip{skip}.csv')
+        #     current_iter.to_sql('bfvstats', con=con, if_exists='append')
 
         skip += 100
 
 
+
 options = Options()
 options.add_argument("start-maximized")
-driver = webdriver.Chrome(service=ChromeService(
-    ChromeDriverManager().install()), options=options)
+driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=options)
 
-history_categories, class_categories = read_categories(
-    'categories_to_scrape.txt')
+history_categories, class_categories = read_categories('categories_to_scrape.txt')
 
-scrape_site(history_categories, class_categories, skip_init=49000)
+scrape_site(history_categories, class_categories)
 
 con.close()
